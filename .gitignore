@@ -1,5 +1,16 @@
 *~
 
+.noshit
+
+core
+*.h.gch
+.exrc
+
+coverage.info
+*.gcov
+*.gcda
+*.gcno
+
 # In the KnowSheet repository, Bricks are installed/updated from GitHub.
 # To avoid conflicts, KnowSheet/Bricks should not be checked in.
 Bricks
