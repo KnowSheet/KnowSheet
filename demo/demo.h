@@ -22,22 +22,30 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
 
+// Defines class `Demo`, which defines the endpoints and keeps the `State` of the demo.
+
 #ifndef DEMO_DEMO_H
 #define DEMO_DEMO_H
 
 #include "../Bricks/dflags/dflags.h"
 
 #include "uptime.h"
+#include "state.h"
 
 DECLARE_int32(demo_port);
 
+namespace demo {
+
+using bricks::net::api::HTTP;
+using bricks::net::api::Request;
+using bricks::net::HTTPResponseCode;
+using namespace bricks::gnuplot;
+
 struct DemoServer {
   DemoServer(int port = FLAGS_demo_port) : port_(port) {
-    using bricks::net::api::HTTP;
-    using bricks::net::api::Request;
-
     HTTP(port).Register("/ok", [](Request r) { r.connection.SendHTTPResponse("OK\n"); });
     HTTP(port).Register("/uptime", UptimeTracker());
+    HTTP(port).Register("/", State::ClassBoundaries);
   }
 
   void Join() {
@@ -48,7 +56,10 @@ struct DemoServer {
     printf("Done.\n");
   }
 
+  State state_;
   const int port_;
 };
+
+}  // namespace demo
 
 #endif  // DEMO_DEMO_H
