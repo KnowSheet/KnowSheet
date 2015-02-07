@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *******************************************************************************/
 
-// Defines class `Demo`, which defines the endpoints and keeps the `State` of the demo.
+// Defines class `DemoServer`, which defines the endpoints and keeps the `State` of the demo.
 
 #ifndef DEMO_DEMO_H
 #define DEMO_DEMO_H
