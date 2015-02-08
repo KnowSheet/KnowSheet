@@ -28,6 +28,6 @@ DEFINE_int32(demo_port, 2015, "The local port to spawn the demo on.");
 
 int main(int argc, char** argv) {
   ParseDFlags(&argc, &argv);
-  DemoServer instance;
+  demo::DemoServer instance;
   instance.Join();
 }
