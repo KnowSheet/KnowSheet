@@ -36,6 +36,7 @@ DECLARE_int32(demo_port);
 
 namespace demo {
 
+using bricks::FileSystem;
 using bricks::net::api::HTTP;
 using bricks::net::api::Request;
 using bricks::net::HTTPResponseCode;
@@ -46,6 +47,15 @@ struct DemoServer {
     HTTP(port).Register("/ok", [](Request r) { r.connection.SendHTTPResponse("OK\n"); });
     HTTP(port).Register("/uptime", UptimeTracker());
     HTTP(port).Register("/", State::ClassBoundaries);
+    FileSystem::ScanDir("static", [&port](const std::string& fn) {
+      // Hack with string ownership.
+      // TODO(dkorolev): Make this cleaner.
+      std::string* ps = new std::string();
+      *ps = FileSystem::ReadFileAsString("static/" + fn);
+      HTTP(port).Register("/static/" + fn, [ps](Request r) {
+        r.connection.SendHTTPResponse(*ps, HTTPResponseCode::OK, "text/plain");
+      });
+    });
   }
 
   void Join() {
