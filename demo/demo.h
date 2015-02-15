@@ -29,8 +29,12 @@ SOFTWARE.
 
 #include <algorithm>
 #include <string>
+#include <type_traits>
 
 #include "../Bricks/dflags/dflags.h"
+#include "../Bricks/cerealize/cerealize.h"
+#include "../Bricks/strings/printf.h"
+#include "../Bricks/time/chrono.h"
 
 #include "uptime.h"
 #include "state.h"
@@ -40,10 +44,72 @@ DECLARE_int32(demo_port);
 namespace demo {
 
 using bricks::FileSystem;
+using bricks::time::Now;
+using bricks::strings::Printf;
 using bricks::net::api::HTTP;
 using bricks::net::api::Request;
 using bricks::net::HTTPResponseCode;
 using namespace bricks::gnuplot;
+using namespace bricks::cerealize;
+
+
+struct LayoutCell {
+  std::string meta_url = "/meta";
+
+  // Define only output serialization (`JSON.stringify()`), forbid input serialization (`JSON.parse()`).
+  template <typename A>
+  void save(A& ar) const {
+    ar(CEREAL_NVP(meta_url));
+  }
+};
+static_assert(is_write_cerealizable<LayoutCell>::value, "");
+static_assert(!is_read_cerealizable<LayoutCell>::value, "");
+
+struct LayoutItem {
+  std::vector<LayoutItem> row;
+  std::vector<LayoutItem> col;
+  LayoutCell cell;
+
+  // Define only output serialization (`JSON.stringify()`), forbid input serialization (`JSON.parse()`).
+  template <typename A>
+  void save(A& ar) const {
+    if (!row.empty()) {
+      ar(CEREAL_NVP(row));
+    } else if (!col.empty()) {
+      ar(CEREAL_NVP(col));
+    } else {
+      ar(CEREAL_NVP(cell));
+    }
+  }
+};
+static_assert(is_write_cerealizable<LayoutItem>::value, "");
+static_assert(!is_read_cerealizable<LayoutItem>::value, "");
+
+struct ExampleMeta {
+  struct Options {
+    std::string header_text = "Real-time Data Made Easy";
+    std::string color = "blue";
+    double min = 0;
+    double max = 1;
+    double time_interval = 10000;
+    template <typename A>
+    void serialize(A& ar) {
+      ar(CEREAL_NVP(header_text),
+         CEREAL_NVP(color),
+         CEREAL_NVP(min),
+         CEREAL_NVP(max),
+         CEREAL_NVP(time_interval));
+    }
+  };
+  std::string data_url = "/data";
+  std::string visualizer_name = "plot-visualizer";
+  Options visualizer_options;
+  template <typename A>
+  void serialize(A& ar) {
+    ar(CEREAL_NVP(data_url), CEREAL_NVP(visualizer_name), CEREAL_NVP(visualizer_options));
+  }
+};
+
 
 class DemoServer {
  public:
@@ -59,45 +125,52 @@ class DemoServer {
           HTTPResponseCode::OK, "application/json");
     });
     HTTP(port).Register("/layout/data", [](Request r) {
-      // TODO(sompylasar): Use cerealize.
-      // TODO(sompylasar): Use chunked response.
-      r.connection.SendHTTPResponse(
-          "{\"x\":0.0,\"y\":1.0}\n",
-          HTTPResponseCode::OK, "application/json");
+      std::thread([](Request&& r) {
+                    // Since we are in another thread, need to catch exceptions ourselves.
+                    try {
+                      auto response = r.connection.SendChunkedHTTPResponse(
+                          HTTPResponseCode::OK,
+                          "application/json; charset=utf-8",
+                          {{"Connection", "keep-alive"}, {"Access-Control-Allow-Origin", "*"}});
+                      std::string data;
+                      const double begin = static_cast<double>(Now());
+                      const double t = atof(r.url.query["t"].c_str());
+                      const double end = (t > 0) ? (begin + t * 1e3) : 1e18;
+                      double current;
+                      while ((current = static_cast<double>(Now())) < end) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(rand() % 100 + 100));
+                        const double x = current;
+                        const double y = sin(5e-3 * (current - begin));
+                        data += Printf("{\"x\":%lf,\"y\":%lf}\n", x, y);
+                        const double f = (rand() % 101) * (rand() % 101) * (rand() % 101) * 1e-6;
+                        const size_t n = static_cast<size_t>(data.length() * f);
+                        if (n) {
+                          response.Send(data.substr(0, n));
+                          data = data.substr(n);
+                        }
+                      }
+                    } catch (const std::exception& e) {
+                      std::cerr << "Exception in data serving thread: " << e.what() << std::endl;
+                    }
+                  },
+                  std::move(r)).detach();
     });
     HTTP(port).Register("/layout/meta", [](Request r) {
-      // TODO(sompylasar): Use cerealize.
-      r.connection.SendHTTPResponse(
-        "\
-{\n\
-  \"meta\":{\n\
-    \"data_url\":\"/data\",\n\
-    \"visualizer_name\":\"value-visualizer\",\n\
-    \"visualizer_options\":{\n\
-      \"header_text\":\"Demo Value\",\n\
-      \"higher_is_better\":true\n\
-    }\n\
-  }\n\
-}\n",
-          HTTPResponseCode::OK,
-          "application/json");
+      r.connection.SendHTTPResponse(ExampleMeta(),
+                                    "meta",
+                                    HTTPResponseCode::OK,
+                                    "application/json; charset=utf-8",
+                                    {{"Connection", "close"}, {"Access-Control-Allow-Origin", "*"}});
     });
     HTTP(port).Register("/layout", [](Request r) {
-      // TODO(sompylasar): Use cerealize.
-      r.connection.SendHTTPResponse(
-          "\
-{\n\
-  \"layout\":{\n\
-    \"col\":[\n\
-      {\n\
-        \"cell\":{\n\
-          \"meta_url\":\"/meta\"\n\
-        }\n\
-      }\n\
-    ]\n\
-  }\n\
-}\n",
-          HTTPResponseCode::OK, "application/json");
+      LayoutItem layout;
+      LayoutItem row;
+      layout.col.push_back(row);
+      r.connection.SendHTTPResponse(layout,
+                                    "layout",
+                                    HTTPResponseCode::OK,
+                                    "application/json; charset=utf-8",
+                                    {{"Connection", "close"}, {"Access-Control-Allow-Origin", "*"}});
     });
     // The "./static/" directory should be a symlink to "Web/build" or "Web/build-dev".
     FileSystem::ScanDir("./static/", [&port](const std::string& filename) {
