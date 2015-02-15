@@ -51,23 +51,29 @@ struct State {
                                       .YRange(-1.2, +1.2)
                                       .Grid("back")
                                       .Plot(WithMeta([](Plotter& p) {
-                                        for (size_t i = 0; i < N; ++i) {
-                                          const double t = M_PI * 2 * i / (N - 1);
-                                          p(sin(t), cos(t));
-                                        }
-                                      }).LineWidth(5).Color("rgb 'black'"))
+                                                       for (size_t i = 0; i < N; ++i) {
+                                                         const double t = M_PI * 2 * i / (N - 1);
+                                                         p(sin(t), cos(t));
+                                                       }
+                                                     })
+                                                .LineWidth(5)
+                                                .Color("rgb 'black'"))
                                       .Plot(WithMeta([](Plotter& p) {
-                                        for (size_t i = 0; i < N / 2; ++i) {
-                                          const double t = M_PI * i / (N / 2 - 1);
-                                          p(+sin(t) * 0.5, cos(t) * 0.5 + 0.5);
-                                        }
-                                      }).LineWidth(5).Color("rgb 'black'"))
+                                                       for (size_t i = 0; i < N / 2; ++i) {
+                                                         const double t = M_PI * i / (N / 2 - 1);
+                                                         p(+sin(t) * 0.5, cos(t) * 0.5 + 0.5);
+                                                       }
+                                                     })
+                                                .LineWidth(5)
+                                                .Color("rgb 'black'"))
                                       .Plot(WithMeta([](Plotter& p) {
-                                        for (size_t i = 0; i < N / 2; ++i) {
-                                          const double t = M_PI * i / (N / 2 - 1);
-                                          p(-sin(t) * 0.5, cos(t) * 0.5 - 0.5);
-                                        }
-                                      }).LineWidth(5).Color("rgb 'black'"))
+                                                       for (size_t i = 0; i < N / 2; ++i) {
+                                                         const double t = M_PI * i / (N / 2 - 1);
+                                                         p(-sin(t) * 0.5, cos(t) * 0.5 - 0.5);
+                                                       }
+                                                     })
+                                                .LineWidth(5)
+                                                .Color("rgb 'black'"))
                                       .OutputFormat("svg"),
                                   HTTPResponseCode::OK,
                                   "image/svg+xml");
