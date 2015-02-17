@@ -101,9 +101,15 @@ struct State {
 
   void DemoRequest(Request r) {
     if (r.http.Method() == "POST") {
-      // TODO(dkorolev): Parse JSON body, condition on `r.http.HasBody()`.
-      points.emplace_back(
-          atof(r.url.query["x"].c_str()), atof(r.url.query["y"].c_str()), !!atoi(r.url.query["label"].c_str()));
+      // TODO(dkorolev): This should get simpler once Bricks 1.0 is out, the `.http.` will go away.
+      if (!r.http.HasBody()) {
+        points.emplace_back(atof(r.url.query["x"].c_str()),
+                            atof(r.url.query["y"].c_str()),
+                            !!atoi(r.url.query["label"].c_str()));
+      } else {
+        // Note: this will throw on an invalid JSON. TODO(dkorolev): Think of it further :-)
+        points.push_back(std::move(JSONParse<Point>(r.http.Body())));
+      }
       r.connection.SendHTTPResponse("ADDED\n");
     } else if (r.url.query["format"] == "svg") {
       // TODO(dkorolev): Change colors, make it red vs. blue.
