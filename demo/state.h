@@ -109,12 +109,12 @@ struct State {
                             !!atoi(r.url.query["label"].c_str()));
         r.connection.SendHTTPResponse("ADDED\n");
       } else {
-        // TODO(dkorolev): Move this logic of returning 500 on JSONParseException (any exception, really) to Bricks.
         try {
           points.push_back(std::move(JSONParse<Point>(r.http.Body())));
           r.connection.SendHTTPResponse("ADDED\n");
         } catch (const JSONParseException& e) {
-          r.connection.SendHTTPResponse(e.what(), HTTPResponseCode::InternalServerError);
+          // For the purposes of this demo, don't do anything in `catch`.
+          // The framework should return "<h1>INTERNAL SERVER ERROR</h1>\n".
         }
       }
     } else if (r.url.query["format"] == "svg") {

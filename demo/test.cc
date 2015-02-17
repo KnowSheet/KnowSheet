@@ -63,7 +63,7 @@ TEST(Demo, AddInvalidPointReturns500) {
   Singleton<DemoServer>();
   const auto response = HTTP(POST("localhost:2015/demo_id", "fffuuuu", "application/json"));
   EXPECT_EQ(500, static_cast<int>(response.code));
-  EXPECT_EQ("Invalid JSON:\nfffuuuu", response.body);
+  EXPECT_EQ("<h1>INTERNAL SERVER ERROR</h1>\n", response.body);
 }
 
 TEST(Demo, HasTwoPoints) {
