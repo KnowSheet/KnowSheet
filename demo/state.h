@@ -114,8 +114,7 @@ struct State {
           points.push_back(std::move(JSONParse<Point>(r.http.Body())));
           r.connection.SendHTTPResponse("ADDED\n");
         } catch (const JSONParseException& e) {
-          // TODO(dkorolev): Make sure just `e.what()` compiles w/o casting to `std::string`.
-          r.connection.SendHTTPResponse(std::string(e.what()), HTTPResponseCode::InternalServerError);
+          r.connection.SendHTTPResponse(e.what(), HTTPResponseCode::InternalServerError);
         }
       }
     } else if (r.url.query["format"] == "svg") {
