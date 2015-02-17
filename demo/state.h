@@ -109,7 +109,7 @@ struct State {
                             !!atoi(r.url.query["label"].c_str()));
         r.connection.SendHTTPResponse("ADDED\n");
       } else {
-        // Note: this will throw on an invalid JSON. TODO(dkorolev): Think of it further :-)
+        // TODO(dkorolev): Move this logic of returning 500 on JSONParseException (any exception, really) to Bricks.
         try {
           points.push_back(std::move(JSONParse<Point>(r.http.Body())));
           r.connection.SendHTTPResponse("ADDED\n");
