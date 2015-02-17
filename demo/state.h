@@ -27,18 +27,39 @@ SOFTWARE.
 #ifndef DEMO_STATE_H
 #define DEMO_STATE_H
 
+#include <vector>
+#include <string>
+
 #include "../Bricks/net/api/api.h"
 #include "../Bricks/net/http/codes.h"
+#include "../Bricks/cerealize/cerealize.h"
 #include "../Bricks/graph/gnuplot.h"
 
 namespace demo {
 
 using bricks::net::api::Request;
 using bricks::net::HTTPResponseCode;
+using bricks::JSONParseException;
+using namespace bricks::cerealize;
 using namespace bricks::gnuplot;
 
 struct State {
-  // TODO(dkorolev): Add the actual data points here.
+  struct Point {
+    double x;
+    double y;
+    bool label;
+    Point(double x = 0, double y = 0, bool label = false) : x(x), y(y), label(label) {}
+    template <typename A>
+    void serialize(A& ar) {
+      ar(CEREAL_NVP(x), CEREAL_NVP(y), CEREAL_NVP(label));
+    }
+  };
+
+  std::vector<Point> points;
+  template <typename A>
+  void serialize(A& ar) {
+    ar(CEREAL_NVP(points));
+  }
 
   State() {}
 
@@ -77,6 +98,57 @@ struct State {
                                       .OutputFormat("svg"),
                                   HTTPResponseCode::OK,
                                   "image/svg+xml");
+  }
+
+  void DemoRequest(Request r) {
+    if (r.http.Method() == "POST") {
+      // TODO(dkorolev): This should get simpler once Bricks 1.0 is out, the `.http.` will go away.
+      if (!r.http.HasBody()) {
+        points.emplace_back(atof(r.url.query["x"].c_str()),
+                            atof(r.url.query["y"].c_str()),
+                            !!atoi(r.url.query["label"].c_str()));
+        r.connection.SendHTTPResponse("ADDED\n");
+      } else {
+        try {
+          points.push_back(std::move(JSONParse<Point>(r.http.Body())));
+          r.connection.SendHTTPResponse("ADDED\n");
+        } catch (const JSONParseException& e) {
+          // For the purposes of this demo, don't do anything in `catch`.
+          // The framework should return "<h1>INTERNAL SERVER ERROR</h1>\n".
+        }
+      }
+    } else if (r.url.query["format"] == "svg") {
+      // TODO(dkorolev): Change colors, make it red vs. blue.
+      r.connection.SendHTTPResponse(GNUPlot()
+                                        .Title("State.")
+                                        .KeyTitle("Legend")
+                                        .XRange(-1.1, +1.1)
+                                        .YRange(-1.1, +1.1)
+                                        .Grid("back")
+                                        .Plot(WithMeta([this](Plotter& plotter) {
+                                                         for (const auto& p : points) {
+                                                           if (!p.label) {
+                                                             plotter(p.x, p.y);
+                                                           }
+                                                         }
+                                                       })
+                                                  .Name("Label \"false\"")
+                                                  .AsPoints())
+                                        .Plot(WithMeta([this](Plotter& plotter) {
+                                                         for (const auto& p : points) {
+                                                           if (p.label) {
+                                                             plotter(p.x, p.y);
+                                                           }
+                                                         }
+                                                       })
+                                                  .Name("Label \"true\"")
+                                                  .AsPoints())
+                                        .OutputFormat("svg"),
+                                    HTTPResponseCode::OK,
+                                    "image/svg+xml");
+    } else {
+      r.connection.SendHTTPResponse(*this, "state", HTTPResponseCode::OK, "application/json");
+    }
   }
 };
 

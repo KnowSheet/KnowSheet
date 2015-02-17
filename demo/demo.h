@@ -56,6 +56,7 @@ struct DemoServer {
         r.connection.SendHTTPResponse(*ps, HTTPResponseCode::OK, "text/plain");
       });
     });
+    HTTP(port).Register("/demo_id", [this](Request r) { state_.DemoRequest(std::move(r)); });
   }
 
   void Join() {
