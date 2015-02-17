@@ -39,6 +39,7 @@ namespace demo {
 
 using bricks::net::api::Request;
 using bricks::net::HTTPResponseCode;
+using bricks::JSONParseException;
 using namespace bricks::cerealize;
 using namespace bricks::gnuplot;
 
@@ -106,11 +107,17 @@ struct State {
         points.emplace_back(atof(r.url.query["x"].c_str()),
                             atof(r.url.query["y"].c_str()),
                             !!atoi(r.url.query["label"].c_str()));
+        r.connection.SendHTTPResponse("ADDED\n");
       } else {
         // Note: this will throw on an invalid JSON. TODO(dkorolev): Think of it further :-)
-        points.push_back(std::move(JSONParse<Point>(r.http.Body())));
+        try {
+          points.push_back(std::move(JSONParse<Point>(r.http.Body())));
+          r.connection.SendHTTPResponse("ADDED\n");
+        } catch (const JSONParseException& e) {
+          // TODO(dkorolev): Make sure just `e.what()` compiles w/o casting to `std::string`.
+          r.connection.SendHTTPResponse(std::string(e.what()), HTTPResponseCode::InternalServerError);
+        }
       }
-      r.connection.SendHTTPResponse("ADDED\n");
     } else if (r.url.query["format"] == "svg") {
       // TODO(dkorolev): Change colors, make it red vs. blue.
       r.connection.SendHTTPResponse(GNUPlot()

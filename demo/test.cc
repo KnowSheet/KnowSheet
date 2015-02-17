@@ -59,6 +59,13 @@ TEST(Demo, AddTwoPoints) {
   EXPECT_EQ("ADDED\n", HTTP(POST("localhost:2015/demo_id", State::Point(-0.25, +0.25, false))).body);
 }
 
+TEST(Demo, AddInvalidPointReturns500) {
+  Singleton<DemoServer>();
+  const auto response = HTTP(POST("localhost:2015/demo_id", "fffuuuu", "application/json"));
+  EXPECT_EQ(500, static_cast<int>(response.code));
+  EXPECT_EQ("Invalid JSON:\nfffuuuu", response.body);
+}
+
 TEST(Demo, HasTwoPoints) {
   Singleton<DemoServer>();
   EXPECT_EQ(
