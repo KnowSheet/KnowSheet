@@ -74,5 +74,5 @@ TEST(Demo, HasThreePoints) {
 TEST(Demo, VisualizesPoints) {
   Singleton<DemoServer>();
   EXPECT_EQ(FileSystem::ReadFileAsString("golden/two_points.svg"),
-            HTTP(GET("localhost:2015/demo_id?img=svg")).body);
+            HTTP(GET("localhost:2015/demo_id?format=svg")).body);
 }

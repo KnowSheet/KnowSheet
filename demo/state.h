@@ -105,7 +105,7 @@ struct State {
       points.emplace_back(
           atof(r.url.query["x"].c_str()), atof(r.url.query["y"].c_str()), !!atoi(r.url.query["label"].c_str()));
       r.connection.SendHTTPResponse("ADDED\n");
-    } else if (r.url.query["img"] == "svg") {
+    } else if (r.url.query["format"] == "svg") {
       // TODO(dkorolev): Change colors, make it red vs. blue.
       r.connection.SendHTTPResponse(GNUPlot()
                                         .Title("State.")
