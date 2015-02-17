@@ -53,13 +53,13 @@ TEST(Demo, NoPointsYet) {
   EXPECT_EQ("{\"state\":{\"points\":[]}}\n", response.body);
 }
 
-TEST(Demo, AddThreePoints) {
+TEST(Demo, AddTwoPoints) {
   Singleton<DemoServer>();
   EXPECT_EQ("ADDED\n", HTTP(POST("localhost:2015/demo_id?x=+0.25&y=-0.25&label=1")).body);
   EXPECT_EQ("ADDED\n", HTTP(POST("localhost:2015/demo_id", State::Point(-0.25, +0.25, false))).body);
 }
 
-TEST(Demo, HasThreePoints) {
+TEST(Demo, HasTwoPoints) {
   Singleton<DemoServer>();
   EXPECT_EQ(
       "{\"state\":{\"points\":["
