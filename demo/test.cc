@@ -40,7 +40,7 @@ using namespace bricks::cerealize;
 using bricks::FileSystem;
 
 TEST(Demo, OK) {
-  Singleton<DemoServer>();
+  Singleton<demo::DemoServer>();
   const auto response = HTTP(GET("localhost:2015/ok"));
   EXPECT_EQ(200, static_cast<int>(response.code));
   EXPECT_EQ("OK\n", response.body);
