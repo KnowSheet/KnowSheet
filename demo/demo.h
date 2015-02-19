@@ -30,6 +30,7 @@ SOFTWARE.
 #include <algorithm>
 #include <string>
 #include <type_traits>
+#include <iostream>
 
 #include "../Bricks/dflags/dflags.h"
 #include "../Bricks/cerealize/cerealize.h"
@@ -48,29 +49,28 @@ using bricks::time::Now;
 using bricks::strings::Printf;
 using bricks::net::api::HTTP;
 using bricks::net::api::Request;
+using bricks::net::HTTPHeaders;
 using bricks::net::HTTPResponseCode;
+using bricks::net::GetFileMimeType;
 using namespace bricks::gnuplot;
 using namespace bricks::cerealize;
 
 
 struct LayoutCell {
+  // The `meta_url` is relative to the `layout_url`.
   std::string meta_url = "/meta";
 
-  // Define only output serialization (`JSON.stringify()`), forbid input serialization (`JSON.parse()`).
   template <typename A>
   void save(A& ar) const {
     ar(CEREAL_NVP(meta_url));
   }
 };
-static_assert(is_write_cerealizable<LayoutCell>::value, "");
-static_assert(!is_read_cerealizable<LayoutCell>::value, "");
 
 struct LayoutItem {
   std::vector<LayoutItem> row;
   std::vector<LayoutItem> col;
   LayoutCell cell;
 
-  // Define only output serialization (`JSON.stringify()`), forbid input serialization (`JSON.parse()`).
   template <typename A>
   void save(A& ar) const {
     if (!row.empty()) {
@@ -82,18 +82,17 @@ struct LayoutItem {
     }
   }
 };
-static_assert(is_write_cerealizable<LayoutItem>::value, "");
-static_assert(!is_read_cerealizable<LayoutItem>::value, "");
 
 struct ExampleMeta {
   struct Options {
     std::string header_text = "Real-time Data Made Easy";
     std::string color = "blue";
-    double min = 0;
+    double min = -1;
     double max = 1;
     double time_interval = 10000;
     template <typename A>
-    void serialize(A& ar) {
+    void save(A& ar) const {
+      // TODO(sompylasar): Make a meta that tells the frontend to use auto-min and max.
       ar(CEREAL_NVP(header_text),
          CEREAL_NVP(color),
          CEREAL_NVP(min),
@@ -101,12 +100,32 @@ struct ExampleMeta {
          CEREAL_NVP(time_interval));
     }
   };
+
+  // The `data_url` is relative to the `layout_url`.
   std::string data_url = "/data";
   std::string visualizer_name = "plot-visualizer";
   Options visualizer_options;
+
   template <typename A>
-  void serialize(A& ar) {
+  void save(A& ar) const {
     ar(CEREAL_NVP(data_url), CEREAL_NVP(visualizer_name), CEREAL_NVP(visualizer_options));
+  }
+};
+
+struct ExampleConfig {
+  std::string layout_url = "/layout";
+
+  // For the sake of the demo we put an empty array of `data_hostnames`
+  // that results in the option being ignored by the frontend.
+  // In production, this array should be filled with a set of alternative
+  // hostnames that all resolve to the same backend. This technique is used 
+  // to overcome the browser domain-based connection limit. The frontend selects
+  // a domain from this array for every new connection via a simple round-robin.
+  std::vector<std::string> data_hostnames;
+
+  template <typename A>
+  void save(A& ar) const {
+    ar(CEREAL_NVP(layout_url), CEREAL_NVP(data_hostnames));
   }
 };
 
@@ -114,24 +133,25 @@ struct ExampleMeta {
 class DemoServer {
  public:
   DemoServer(int port = FLAGS_demo_port) : port_(port) {
-    printf("Preparing to listen on port %d...\n", port_);
+    std::cout << Printf("Preparing to listen on port %d...\n", port_);
     HTTP(port).Register("/ok", [](Request r) { r.connection.SendHTTPResponse("OK\n"); });
     HTTP(port).Register("/uptime", UptimeTracker());
-    HTTP(port).Register("/yingyang.svg", State::ClassBoundaries);
+    HTTP(port).Register("/yinyang.svg", State::ClassBoundaries);
     HTTP(port).Register("/config.json", [](Request r) {
-      // TODO(sompylasar): Use cerealize.
-      r.connection.SendHTTPResponse(
-          "{}\n",
-          HTTPResponseCode::OK, "application/json");
+      r.connection.SendHTTPResponse(ExampleConfig(),
+                                    "config",
+                                    HTTPResponseCode::OK,
+                                    "application/json; charset=utf-8",
+                                    HTTPHeaders({{"Access-Control-Allow-Origin", "*"}}));
     });
     HTTP(port).Register("/layout/data", [](Request r) {
-      std::thread([](Request&& r) {
+      std::thread([](Request r) {
                     // Since we are in another thread, need to catch exceptions ourselves.
                     try {
                       auto response = r.connection.SendChunkedHTTPResponse(
                           HTTPResponseCode::OK,
                           "application/json; charset=utf-8",
-                          {{"Connection", "keep-alive"}, {"Access-Control-Allow-Origin", "*"}});
+                          {{"Access-Control-Allow-Origin", "*"}});
                       std::string data;
                       const double begin = static_cast<double>(Now());
                       const double t = atof(r.url.query["t"].c_str());
@@ -160,7 +180,7 @@ class DemoServer {
                                     "meta",
                                     HTTPResponseCode::OK,
                                     "application/json; charset=utf-8",
-                                    {{"Connection", "close"}, {"Access-Control-Allow-Origin", "*"}});
+                                    HTTPHeaders({{"Access-Control-Allow-Origin", "*"}}));
     });
     HTTP(port).Register("/layout", [](Request r) {
       LayoutItem layout;
@@ -170,19 +190,19 @@ class DemoServer {
                                     "layout",
                                     HTTPResponseCode::OK,
                                     "application/json; charset=utf-8",
-                                    {{"Connection", "close"}, {"Access-Control-Allow-Origin", "*"}});
+                                    HTTPHeaders({{"Access-Control-Allow-Origin", "*"}}));
     });
     // The "./static/" directory should be a symlink to "Web/build" or "Web/build-dev".
     FileSystem::ScanDir("./static/", [&port](const std::string& filename) {
-      std::string filepath = "./static/" + filename;
+      const std::string filepath = "./static/" + filename;
       std::string fileurl = "/static/" + filename;
       // The default route points to the frontend entry point file.
       if (filename == "index.html") {
-        fileurl.assign("/");
+        fileurl = "/";
       }
       // Hack with string ownership.
       // TODO(dkorolev): Make this cleaner.
-      std::string* contentType = new std::string(DemoServer::GetFileMimeType(filename));
+      const std::string* contentType = new std::string(GetFileMimeType(filename));
       std::string* content = new std::string();
       *content = FileSystem::ReadFileAsString(filepath);
       HTTP(port).Register(fileurl, [content, contentType](Request r) {
@@ -192,59 +212,14 @@ class DemoServer {
   }
 
   void Join() {
-    printf("Listening on port %d\n", port_);
+    std::cout << Printf("Listening on port %d\n", port_);
     HTTP(port_).Join();
-    printf("Done.\n");
+    std::cout << Printf("Done.\n");
   }
 
  private:
   State state_;
   const int port_;
-
-  /**
-   * Gets the file extension from the file name or path.
-   */
-  static const std::string GetFileExtension(const std::string& filename) {
-    size_t fileextIndex = filename.find_last_of("/\\.");
-
-    if (fileextIndex == std::string::npos || filename[fileextIndex] != '.') {
-      return "";
-    }
-
-    // Add 1 to skip the dot.
-    std::string fileext = filename.substr(fileextIndex + 1);
-
-    return fileext;
-  }
-
-  /**
-   * Detects MIME type by the file extension.
-   */
-  static const std::string GetFileMimeType(const std::string& filename) {
-    std::string fileext = DemoServer::GetFileExtension(filename);
-
-    std::transform(fileext.begin(), fileext.end(), fileext.begin(), ::tolower);
-
-    std::map<std::string, std::string> mimeTypesByExtension = {
-      {"js", "application/javascript"},
-      {"json", "application/json"},
-      {"css", "text/css"},
-      {"html", "text/html"},
-      {"htm", "text/html"},
-      {"txt", "text/plain"},
-      {"png", "image/png"},
-      {"jpg", "image/jpeg"},
-      {"jpeg", "image/jpeg"},
-      {"gif", "image/gif"},
-      {"svg", "image/svg"}
-    };
-
-    if (mimeTypesByExtension.count(fileext)) {
-      return mimeTypesByExtension.at(fileext);
-    }
-
-    return "text/plain";
-  }
 };
 
 }  // namespace demo
